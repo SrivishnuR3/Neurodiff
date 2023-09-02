@@ -1,42 +1,38 @@
 import numpy as np
 from neurodiffeq import diff
 from neurodiffeq.conditions import IVP
-from neurodiffeq.ode import solve_system, Monitor
+from neurodiffeq.ode import solve_system, Monitor1D
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-def einstein_eqs(alpha, beta, r):
-    d_alpha_r = diff(alpha, r)
-    d_beta_r = diff(beta, r)
-    d2_alpha_r2 = diff(alpha, r, order=2)
-    d2_beta_r2 = diff(beta, r, order=2)
-    
-    R_tt = torch.exp(2*beta) * (2*r*d_beta_r + r**2 * d_beta_r**2 - r**2 * d_alpha_r * d_beta_r + r**2 * d2_alpha_r2)
-    R_rr = -torch.exp(2*alpha) * (2*r*d_alpha_r + r**2 * d_alpha_r**2 - r**2 * d_alpha_r * d_beta_r - r**2 * d2_beta_r2)
-    
-    return [R_tt, R_rr]
-
-initial_conditions = [
-    IVP(t_0=0, u_0=torch.tensor(0.0)),  # initial condition for alpha at r=0
-    IVP(t_0=0, u_0=torch.tensor(0.0))   # initial condition for beta at r=0
+# specify the ODE system
+parametric_circle = lambda u1, u2, t : [diff(u1, t) - u2,
+                                        diff(u2, t) + u1]
+# specify the initial conditions
+init_vals_pc = [
+    IVP(t_0=0.0, u_0=0.0),
+    IVP(t_0=0.0, u_0=1.0)
 ]
 
-solution = solve_system(
-    ode_system=einstein_eqs, 
-    conditions=initial_conditions, 
-    t_min=0.0, 
-    t_max=2.0  # You can adjust this
+# solve the ODE system
+solution_pc, _ = solve_system(
+    ode_system=parametric_circle, conditions=init_vals_pc, t_min=0.0, t_max=2*np.pi,
+    max_epochs=5000,
+    monitor=Monitor1D(t_min=0.0, t_max=2*np.pi, check_every=100)
 )
 
-alpha_sol, beta_sol = solution
+ts = np.linspace(0, 2*np.pi, 100)
+u1_net, u2_net = solution_pc(ts, to_numpy=True)
+u1_ana, u2_ana = np.sin(ts), np.cos(ts)
 
-ts = np.linspace(0, 2.0, 50)
 plt.figure()
-plt.plot(ts, alpha_sol, label='Alpha')
-plt.plot(ts, beta_sol, '.', label='Beta')
+plt.plot(ts, u1_net, label='ANN-based solution of $u_1$')
+plt.plot(ts, u1_ana, '.', label='Analytical solution of $u_1$')
+plt.plot(ts, u2_net, label='ANN-based solution of $u_2$')
+plt.plot(ts, u2_ana, '.', label='Analytical solution of $u_2$')
 plt.ylabel('u')
-plt.xlabel('r')
+plt.xlabel('t')
 plt.title('comparing solutions')
 plt.legend()
 plt.show()
